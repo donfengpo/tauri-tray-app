@@ -1,0 +1,26 @@
+# 构建输出
+target/
+dist/
+src-tauri/target/
+
+# 依赖目录
+node_modules/
+
+# 生成目录
+src-tauri/gen/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 大文件和压缩包
+*.zip
+*.rar
+node_modules.zip
+
+# 日志文件
+*.log
+
+# 环境变量
+.env
+.env.local

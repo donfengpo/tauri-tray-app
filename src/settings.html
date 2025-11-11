@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>设置</title>
+    <style>
+        body {
+            font-family: "Microsoft YaHei", sans-serif;
+            display: flex;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+            background-color: #f0f2f5;
+        }
+        .container {
+            display: flex;
+            width: 100%;
+            gap: 20px;
+        }
+        .panel {
+            padding: 20px;
+            border-radius: 8px;
+            background-color: #ffffff;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        .left-panel {
+            flex: 0 0 300px;
+        }
+        .right-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .group-box {
+            margin-bottom: 20px;
+        }
+        .group-box h3 {
+            margin-top: 0;
+            border-bottom: 1px solid #e8e8e8;
+            padding-bottom: 10px;
+            font-size: 16px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+        }
+        input[type="text"] {
+            width: calc(100% - 20px);
+            padding: 8px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin-bottom: 10px;
+        }
+        input[readonly] {
+            background-color: #f9f9f9;
+        }
+        button {
+            padding: 10px 15px;
+            border: none;
+            background-color: #1890ff;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #40a9ff;
+        }
+        textarea {
+            width: calc(100% - 20px);
+            height: 100px;
+            padding: 8px 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            resize: vertical;
+        }
+        .user-info label {
+            color: red;
+        }
+        .ad-placeholder {
+            width: 100%;
+            height: 450px;
+            background-color: #e9e9e9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+        .bottom-row {
+            display: flex;
+            gap: 20px;
+        }
+        .bottom-row > div {
+            flex: 1;
+        }
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.75);
+            color: #fff;
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-size: 14px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            z-index: 9999;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="panel left-panel">
+            <div class="group-box">
+                <h3>操作与信息</h3>
+                <label for="machine-code">您的机器码:</label>
+                <input type="text" id="machine-code" readonly>
+                <button id="copy-machine-code">复制机器码</button>
+            </div>
+            <div class="group-box user-info">
+                <label for="user-type">用户类型:</label>
+                <input type="text" id="user-type" readonly>
+                <label for="expiry-date">有效期:</label>
+                <input type="text" id="expiry-date" readonly>
+            </div>
+            <div class="group-box">
+                <label>数据更新设置:</label>
+                <button id="manual-update">手动更新数据</button>
+            </div>
+            <div class="group-box">
+                <label for="tdx-path">通达信安装目录:</label>
+                <input type="text" id="tdx-path" readonly>
+                <button id="set-tdx-path">手动设置目录</button>
+            </div>
+            <div class="group-box">
+                <h3>日志</h3>
+                <textarea id="log-display" readonly></textarea>
+            </div>
+        </div>
+        <div class="right-panel">
+            <div class="ad-placeholder" id="ad-display">
+                广告位
+            </div>
+            <div class="bottom-row">
+                <div class="panel">
+                    <h3>公告栏</h3>
+                    <textarea id="notice-box" readonly></textarea>
+                </div>
+                <div class="panel">
+                    <h3>作者联系方式</h3>
+                    <textarea id="author-contact" readonly>QQ: 123456aaaaaaa78
+Email: author@example.com</textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script>
+        const { invoke } = window.__TAURI__.core;
+
+        function showToast(message) {
+            const el = document.createElement('div');
+            el.className = 'toast';
+            el.textContent = message;
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 2000);
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // 填充 AUTH 信息
+            invoke('get_auth_info')
+                .then(info => {
+                    document.getElementById('machine-code').value = info.machine_code || '';
+                    document.getElementById('user-type').value = info.user_type_display || '';
+                    document.getElementById('expiry-date').value = info.auth_end || '';
+                })
+                .catch(error => {
+                    console.error('加载认证信息失败: ', error);
+                });
+        });
+
+        // In a real application, you would use Tauri's API
+        // to populate these fields and handle button clicks.
+        document.getElementById('copy-machine-code').addEventListener('click', () => {
+            const machineCode = document.getElementById('machine-code').value || '';
+            navigator.clipboard.writeText(machineCode)
+                .then(() => {
+                    const msg = machineCode ? `${machineCode} 已复制到剪贴板` : '机器码已复制到剪贴板';
+                    showToast(msg);
+                })
+                .catch(() => showToast('复制失败，请重试'));
+        });
+
+        document.getElementById('ad-display').addEventListener('click', () => {
+            // Use Tauri's shell API to open a link
+            // window.__TAURI__.shell.open('https://www.baidu.com');
+            alert("打开链接: https://www.baidu.com");
+        });
+    </script>
+</body>
+</html>
