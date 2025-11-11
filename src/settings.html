@@ -224,6 +224,19 @@ Email: author@example.com</textarea>
                     const fallback = document.getElementById('ad-fallback');
                     fallback.textContent = '找不到文件 advertisement.png';
                 });
+
+            // 加载同步日志
+            invoke('get_sync_log')
+                .then(text => {
+                    const el = document.getElementById('log-display');
+                    el.value = text || '';
+                })
+                .catch(err => {
+                    const el = document.getElementById('log-display');
+                    el.value = (typeof err === 'string' && err.includes('无法读取日志文件'))
+                        ? err
+                        : '错误: 无法读取日志文件\nresources/sync_log.ini';
+                });
         });
 
         // In a real application, you would use Tauri's API

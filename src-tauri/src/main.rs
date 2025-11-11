@@ -124,6 +124,36 @@ fn get_advertisement_data_url(app: tauri::AppHandle) -> Result<String, String> {
     Ok(format!("data:image/png;base64,{}", encoded))
 }
 
+fn extract_db_date_display(content: &str) -> String {
+    let mut last: Option<&str> = None;
+    for line in content.lines() {
+        let t = line.trim();
+        if t.starts_with("上次同步时间") || t.starts_with("上次检查时间") {
+            last = Some(t);
+        }
+    }
+    if let Some(l) = last {
+        if let Some((_k, v)) = l.split_once('=') {
+            let val = v.trim();
+            let date_part = val.split_once('(').map(|(d, _)| d.trim()).unwrap_or(val);
+            return format!("数据库日期: {}\n", date_part);
+        }
+    }
+    String::new()
+}
+
+#[tauri::command]
+fn get_sync_log(app: tauri::AppHandle) -> Result<String, String> {
+    let path = app
+        .path()
+        .resolve("resources/sync_log.ini", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| e.to_string())?;
+    let content = fs::read_to_string(&path)
+        .map_err(|_| format!("错误: 无法读取日志文件\n{}", path.display()))?;
+    let prefix = extract_db_date_display(&content);
+    Ok(format!("{}{}", prefix, content))
+}
+
 #[derive(Serialize)]
 struct TdxPathStatus {
     path: String,
@@ -317,6 +347,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
             get_auth_info,
             get_announcement,
             get_advertisement_data_url,
+            get_sync_log,
             ensure_tdx_path_configured,
             set_new_tdx_path
         ])
