@@ -10,6 +10,7 @@ use ico::{IconDir};
 
 use std::fs;
 use serde::Serialize;
+use base64::{engine::general_purpose, Engine as _};
 
 #[tauri::command]
 fn get_ini_content(app: tauri::AppHandle) -> Result<String, String> {
@@ -74,6 +75,53 @@ fn get_auth_info(app: tauri::AppHandle) -> Result<AuthInfo, String> {
     })
 }
 
+#[derive(Serialize)]
+struct Announcement {
+    title: String,
+    content: String,
+}
+
+#[tauri::command]
+fn get_announcement(app: tauri::AppHandle) -> Result<Announcement, String> {
+    let path = app
+        .path()
+        .resolve("resources/announcement.ini", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| e.to_string())?;
+    let content = fs::read_to_string(path).map_err(|e| e.to_string())?;
+
+    let mut title = String::from("(无标题)");
+    let mut body = String::from("(无内容)");
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with(';') || trimmed.starts_with('#') {
+            continue;
+        }
+        if let Some((k, v)) = trimmed.split_once('=') {
+            let key = k.trim().to_lowercase();
+            let val = v.trim();
+            match key.as_str() {
+                "title" => title = val.to_string(),
+                "content" => body = val.to_string(),
+                _ => {}
+            }
+        }
+    }
+
+    Ok(Announcement { title, content: body })
+}
+
+#[tauri::command]
+fn get_advertisement_data_url(app: tauri::AppHandle) -> Result<String, String> {
+    let path = app
+        .path()
+        .resolve("resources/advertisement.png", tauri::path::BaseDirectory::Resource)
+        .map_err(|e| e.to_string())?;
+    let bytes = fs::read(path).map_err(|e| e.to_string())?;
+    let encoded = general_purpose::STANDARD.encode(bytes);
+    Ok(format!("data:image/png;base64,{}", encoded))
+}
+
 fn main() {
     run().expect("Failed to run application");
 }
@@ -125,7 +173,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_ini_content, get_auth_info])
+        .invoke_handler(tauri::generate_handler![get_ini_content, get_auth_info, get_announcement, get_advertisement_data_url])
         .build(tauri::generate_context!())?;
 
     app.run(|_app_handle, _event| {});

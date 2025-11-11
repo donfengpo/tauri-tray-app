@@ -142,7 +142,8 @@
         </div>
         <div class="right-panel">
             <div class="ad-placeholder" id="ad-display">
-                广告位
+                <img id="ad-image" alt="广告位" style="max-width: 100%; max-height: 450px; border-radius: 8px; display: none;" />
+                <span id="ad-fallback">广告位</span>
             </div>
             <div class="bottom-row">
                 <div class="panel">
@@ -179,6 +180,30 @@ Email: author@example.com</textarea>
                 .catch(error => {
                     console.error('加载认证信息失败: ', error);
                 });
+
+            // 加载公告
+            invoke('get_announcement')
+                .then(data => {
+                    const text = `标题: ${data.title}\n\n${data.content}`;
+                    document.getElementById('notice-box').value = text;
+                })
+                .catch(() => {
+                    document.getElementById('notice-box').value = '找不到文件 announcement.ini';
+                });
+
+            // 加载广告图片
+            invoke('get_advertisement_data_url')
+                .then(url => {
+                    const img = document.getElementById('ad-image');
+                    const fallback = document.getElementById('ad-fallback');
+                    img.src = url;
+                    img.style.display = 'block';
+                    fallback.style.display = 'none';
+                })
+                .catch(() => {
+                    const fallback = document.getElementById('ad-fallback');
+                    fallback.textContent = '找不到文件 advertisement.png';
+                });
         });
 
         // In a real application, you would use Tauri's API
@@ -193,11 +218,10 @@ Email: author@example.com</textarea>
                 .catch(() => showToast('复制失败，请重试'));
         });
 
-        document.getElementById('ad-display').addEventListener('click', () => {
-            // Use Tauri's shell API to open a link
-            // window.__TAURI__.shell.open('https://www.baidu.com');
-            alert("打开链接: https://www.baidu.com");
-        });
+        // 可选：点击广告打开链接（如需）
+        // document.getElementById('ad-display').addEventListener('click', () => {
+        //     alert("打开链接: https://www.baidu.com");
+        // });
     </script>
 </body>
 </html>
