@@ -109,6 +109,7 @@
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
             z-index: 9999;
         }
+        #tdx-path.invalid { color: #d32f2f; }
     </style>
 </head>
 <body>
@@ -159,7 +160,9 @@ Email: author@example.com</textarea>
         </div>
     </div>
     <script>
-        const { invoke } = window.__TAURI__.core;
+        const invoke = window.__TAURI__?.core?.invoke
+            ? window.__TAURI__.core.invoke
+            : ((cmd, args) => Promise.reject('Tauri 未可用'));
 
         function showToast(message) {
             const el = document.createElement('div');
@@ -170,6 +173,23 @@ Email: author@example.com</textarea>
         }
 
         document.addEventListener('DOMContentLoaded', () => {
+            // 加载并显示通达信路径配置
+            invoke('ensure_tdx_path_configured')
+                .then(status => {
+                    const el = document.getElementById('tdx-path');
+                    el.value = status.path || '';
+                    if (!status.is_valid) {
+                        el.classList.add('invalid');
+                        if (status.error_msg) showToast(status.error_msg);
+                    } else {
+                        el.classList.remove('invalid');
+                    }
+                })
+                .catch(() => {
+                    const el = document.getElementById('tdx-path');
+                    el.value = 'C\\new_tdx';
+                    el.classList.add('invalid');
+                });
             // 填充 AUTH 信息
             invoke('get_auth_info')
                 .then(info => {
@@ -216,6 +236,35 @@ Email: author@example.com</textarea>
                     showToast(msg);
                 })
                 .catch(() => showToast('复制失败，请重试'));
+        });
+
+        // 手动设置通达信安装目录
+        document.getElementById('set-tdx-path').addEventListener('click', async () => {
+            const current = document.getElementById('tdx-path').value || 'C\\new_tdx';
+            let selected = null;
+            if (window.__TAURI__?.dialog?.open) {
+                try {
+                    selected = await window.__TAURI__.dialog.open({ directory: true, multiple: false, defaultPath: current });
+                } catch (e) { /* 忽略对话框异常 */ }
+            }
+            if (!selected) {
+                selected = window.prompt('请输入新的通达信安装目录:', current);
+            }
+            if (!selected) return;
+
+            invoke('set_new_tdx_path', { new_path: selected })
+                .then(status => {
+                    const el = document.getElementById('tdx-path');
+                    el.value = status.path || '';
+                    if (!status.is_valid) {
+                        el.classList.add('invalid');
+                        if (status.error_msg) alert(status.error_msg);
+                    } else {
+                        el.classList.remove('invalid');
+                        showToast('通达信目录已更新！');
+                    }
+                })
+                .catch(() => alert('设置失败'));
         });
 
         // 可选：点击广告打开链接（如需）

@@ -11,6 +11,8 @@ use ico::{IconDir};
 use std::fs;
 use serde::Serialize;
 use base64::{engine::general_purpose, Engine as _};
+use std::env;
+use std::path::{Path, PathBuf};
 
 #[tauri::command]
 fn get_ini_content(app: tauri::AppHandle) -> Result<String, String> {
@@ -122,6 +124,143 @@ fn get_advertisement_data_url(app: tauri::AppHandle) -> Result<String, String> {
     Ok(format!("data:image/png;base64,{}", encoded))
 }
 
+#[derive(Serialize)]
+struct TdxPathStatus {
+    path: String,
+    is_valid: bool,
+    error_msg: String,
+}
+
+fn resolve_tdx_ini_path() -> PathBuf {
+    // 优先查找当前工作目录及其父级，再尝试 resources 目录
+    let cwd = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    let parent = cwd.parent().map(|p| p.to_path_buf());
+    let candidates = vec![
+        cwd.join("tdx_settings.ini"),
+        cwd.join("resources").join("tdx_settings.ini"),
+        cwd.join("..").join("tdx_settings.ini"),
+    ];
+    for p in &candidates {
+        if p.exists() {
+            return p.clone();
+        }
+    }
+    if let Some(p) = parent { return p.join("tdx_settings.ini"); }
+    cwd.join("tdx_settings.ini")
+}
+
+fn read_tdx_dir_from_ini(ini_path: &Path) -> Option<String> {
+    let content = fs::read_to_string(ini_path).ok()?;
+    let mut in_paths = false;
+    for line in content.lines() {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            let sect = &trimmed[1..trimmed.len()-1];
+            in_paths = sect.eq_ignore_ascii_case("Paths");
+            continue;
+        }
+        if in_paths {
+            if let Some((k, v)) = trimmed.split_once('=') {
+                if k.trim().eq_ignore_ascii_case("TDX_Directory") {
+                    return Some(v.trim().to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+fn write_tdx_dir_to_ini(ini_path: &Path, new_dir: &str) -> Result<(), String> {
+    let line_new = format!("TDX_Directory = {}", new_dir);
+    if ini_path.exists() {
+        let content = fs::read_to_string(ini_path).map_err(|e| e.to_string())?;
+        let mut out = String::new();
+        let mut in_paths = false;
+        let mut found_paths = false;
+        let mut updated_key = false;
+
+        for line in content.lines() {
+            let trimmed = line.trim();
+            if trimmed.starts_with('[') && trimmed.ends_with(']') {
+                if in_paths && !updated_key {
+                    out.push_str(&line_new);
+                    out.push('\n');
+                }
+                let sect = &trimmed[1..trimmed.len()-1];
+                in_paths = sect.eq_ignore_ascii_case("Paths");
+                if in_paths { found_paths = true; }
+                out.push_str(line);
+                out.push('\n');
+                continue;
+            }
+            if in_paths {
+                if let Some((k, _)) = trimmed.split_once('=') {
+                    if k.trim().eq_ignore_ascii_case("TDX_Directory") {
+                        out.push_str(&line_new);
+                        out.push('\n');
+                        updated_key = true;
+                        continue;
+                    }
+                }
+            }
+            out.push_str(line);
+            out.push('\n');
+        }
+
+        if in_paths && !updated_key {
+            out.push_str(&line_new);
+            out.push('\n');
+        }
+        if !found_paths {
+            out.push_str("\n[Paths]\n");
+            out.push_str(&line_new);
+            out.push('\n');
+        }
+        fs::write(ini_path, out).map_err(|e| e.to_string())?
+    } else {
+        let out = format!("[Paths]\n{}\n", line_new);
+        fs::write(ini_path, out).map_err(|e| e.to_string())?
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn ensure_tdx_path_configured() -> Result<TdxPathStatus, String> {
+    let ini_path = resolve_tdx_ini_path();
+    let default_path = String::from("C:\\new_tdx");
+    let saved = read_tdx_dir_from_ini(&ini_path);
+    let tdx_path = saved.clone().unwrap_or(default_path.clone());
+    let signals = PathBuf::from(&tdx_path).join("T0002").join("signals");
+    let is_valid = signals.exists();
+    let mut error_msg = String::new();
+
+    if is_valid {
+        if saved.is_none() {
+            write_tdx_dir_to_ini(&ini_path, &tdx_path)?;
+        }
+    } else {
+        error_msg = String::from("默认或已存路径无效, 请手动设置");
+    }
+
+    Ok(TdxPathStatus { path: tdx_path, is_valid, error_msg })
+}
+
+#[tauri::command]
+fn set_new_tdx_path(new_path: String) -> Result<TdxPathStatus, String> {
+    let signals = PathBuf::from(&new_path).join("T0002").join("signals");
+    if signals.exists() {
+        let ini_path = resolve_tdx_ini_path();
+        write_tdx_dir_to_ini(&ini_path, &new_path)?;
+        Ok(TdxPathStatus { path: new_path, is_valid: true, error_msg: String::new() })
+    } else {
+        Ok(TdxPathStatus {
+            path: new_path,
+            is_valid: false,
+            error_msg: String::from("错误：您选择的路径不合法！请确保所选目录下存在 T0002\\signals 文件夹。"),
+        })
+    }
+}
+
 fn main() {
     run().expect("Failed to run application");
 }
@@ -173,7 +312,14 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![get_ini_content, get_auth_info, get_announcement, get_advertisement_data_url])
+        .invoke_handler(tauri::generate_handler![
+            get_ini_content,
+            get_auth_info,
+            get_announcement,
+            get_advertisement_data_url,
+            ensure_tdx_path_configured,
+            set_new_tdx_path
+        ])
         .build(tauri::generate_context!())?;
 
     app.run(|_app_handle, _event| {});
