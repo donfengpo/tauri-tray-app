@@ -16,6 +16,16 @@
   </style>
 </head>
 <body>
-  <h1>Welcome to Tauri Tray App!</h1>
+  <script>
+    // 页面加载后立即跳转到设置页面
+    (function() {
+      const target = 'settings.html';
+      // 使用相对路径跳转到设置页
+      window.location.replace(target);
+    })();
+  </script>
+  <noscript>
+    <p>本页面将跳转到设置页：<a href="settings.html">settings.html</a></p>
+  </noscript>
 </body>
 </html>
